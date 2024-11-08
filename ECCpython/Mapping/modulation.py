@@ -30,10 +30,9 @@ class Modulation(Mapping):
 
         super().__init__(m, coding_type)
 
-        # idea is that the coding array is a reordering of the modulation array (but with args)
-        self._MOD_ = self.modDICT[self.modulation_type]()
-        self.E = np.sqrt(np.sum(np.abs(self._MOD_) ** 2) / self.M)  # energy normalisation factor
-        self._MOD = self._MOD_[self._sort] / self.E  # normalised
+        self.constellation = self.modDICT[self.modulation_type]()
+        self.E = np.mean(np.abs(self.constellation) ** 2)  # energy normalisation factor
+        self.constellationNorm = self.constellation[self._sort] / np.sqrt(self.E)  # normalised
         self._X = self.modulate(self._Cbin)
 
         self.Lmax = 1000
@@ -183,7 +182,7 @@ class Modulation(Mapping):
         data = self._zero_pad(data)
         data = np.reshape(data, (-1, self.m))
         dec = bi2de(data)
-        x = np.array([self._MOD[d] for d in dec])
+        x = np.array([self.constellationNorm[d] for d in dec])
         return x
 
     def demodulate(self, data, return_Xhat=False):
@@ -194,12 +193,12 @@ class Modulation(Mapping):
         x_hat = np.zeros_like(data)
         for i, d in enumerate(data):
             distance = np.inf
-            for j, z in enumerate(self._MOD):
+            for j, z in enumerate(self.constellationNorm):
                 temp_d = np.abs(z - d)**2
                 if temp_d < distance:
                     distance = temp_d
                     x[i] = j
-                    x_hat[i] = self._MOD[j]
+                    x_hat[i] = self.constellationNorm[j]
         u_hat = de2bi(x, self.m).ravel()
 
         # can be done with wrappers in future
