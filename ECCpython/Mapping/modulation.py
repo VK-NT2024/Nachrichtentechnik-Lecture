@@ -30,9 +30,9 @@ class Modulation(Mapping):
 
         super().__init__(m, coding_type)
 
-        self.constellation = self.modDICT[self.modulation_type]()
+        self.constellation = self.modDICT[self.modulation_type]()[self._sort]
         self.E = np.mean(np.abs(self.constellation) ** 2)  # energy normalisation factor
-        self.constellationNorm = self.constellation[self._sort] / np.sqrt(self.E)  # normalised
+        self.constellationNorm = self.constellation / np.sqrt(self.E)  # normalised
         self._X = self.modulate(self._Cbin)
 
         self.Lmax = 1000
@@ -157,7 +157,7 @@ class Modulation(Mapping):
         return time_idx, h_rrc
 
     @property
-    def constellation(self):
+    def plot_constellation(self):
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
         constellation = self._X * self.E
@@ -245,7 +245,7 @@ class Modulation(Mapping):
     def ASK(self):
         """
         """
-        return (1 - self.M) / 2 + np.arange(self.M)
+        return (1 - self.M) + np.arange(self.M) * 2
 
     def PSK(self):
         """
