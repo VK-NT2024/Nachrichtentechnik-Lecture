@@ -17,14 +17,14 @@ class Mapping:
         self.coding_type = coding_type
         self.M = 2 ** m  # number of symbols eg: if m = 3 then M = 8
 
-        self.mapDICT = {'gray': self.gray,
-                        'natural': self.natural,
-                        'antigray': self.antigray,
-                        'random': self.random,
-                        'QAM_gray': self.QAM_gray,
-                        'QAM_antigray': self.QAM_antigray}
+        mapDICT = {'gray': self.gray,
+                   'natural': self.natural,
+                   'antigray': self.antigray,
+                   'random': self.random,
+                   'QAM_gray': self.QAM_gray,
+                   'QAM_antigray': self.QAM_antigray}
 
-        self._C = self.mapDICT[self.coding_type]()
+        self._C = mapDICT[self.coding_type]()
         self._D = {c: i for i, c in enumerate(self._C)}
         self._Cbin = de2bi(self._C, self.m)
         self._Cdict = {c_dec: c_bin for c_dec, c_bin in zip(self._C, self._Cbin)}
@@ -73,7 +73,7 @@ class Mapping:
                 x1 = [np.append(z, 0) for z in gray_mapper]
                 x2 = [np.append(z, 1) for z in flipped]
                 gray_mapper = np.append(x1, x2, axis=0)
-        return bi2de(gray_mapper)
+        return bi2de(gray_mapper, leftMSB=False)
 
     def natural(self):
         """

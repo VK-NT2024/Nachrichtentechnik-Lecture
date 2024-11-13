@@ -1,5 +1,5 @@
 import numpy as np
-from Mapping.mapping import Mapping
+from Modulation.mapping import Mapping
 from Tools.helperFuncs import de2bi
 from Tools.helperFuncs import bi2de
 
@@ -17,10 +17,10 @@ class Modulation(Mapping):
             raise ValueError("modulation_type needs to be 'PSK', 'ASK' or 'QAM'")
 
         self.modulation_type = modulation_type
-        self.modDICT = {'PSK': self.PSK,
-                        'ASK': self.ASK,
-                        'QAM': self.QAM,
-                        'new': 'self.new'}
+        modDICT = {'PSK': self.PSK,
+                   'ASK': self.ASK,
+                   'QAM': self.QAM,
+                   'new': 'self.new'}
 
         if self.modulation_type == 'QAM':
             if coding_type == 'gray':
@@ -30,7 +30,7 @@ class Modulation(Mapping):
 
         super().__init__(m, coding_type)
 
-        self.constellation = self.modDICT[self.modulation_type]()[self._sort]
+        self.constellation = modDICT[self.modulation_type]()  # [self._sort]
         self.E = np.mean(np.abs(self.constellation) ** 2)  # energy normalisation factor
         self.constellationNorm = self.constellation / np.sqrt(self.E)  # normalised
         self._X = self.modulate(self._Cbin)
@@ -39,7 +39,7 @@ class Modulation(Mapping):
         self._funct = {
             'exact': lambda input: np.log(np.sum(np.nan_to_num(np.exp(input), nan=self.Lmax))),
             'approximation': lambda input: np.max(input)
-                        }
+        }
         self.default = 'approximation'
         self._funct['default'] = self._funct[self.default]
 
@@ -56,117 +56,22 @@ class Modulation(Mapping):
     def spectral_efficiency(self):
         return self.m
 
-    def rcosfilter(N, alpha, Ts, Fs):
-        """
-        Generates a raised cosine (RC) filter (FIR) impulse response.
-
-        Parameters
-        ----------
-        N : int
-            Length of the filter in samples.
-
-        alpha : float
-            Roll off factor (Valid values are [0, 1]).
-
-        Ts : float
-            Symbol period in seconds.
-
-        Fs : float
-            Sampling Rate in Hz.
-
-        Returns
-        -------
-
-        h_rc : 1-D ndarray (float)
-            Impulse response of the raised cosine filter.
-
-        time_idx : 1-D ndarray (float)
-            Array containing the time indices, in seconds, for the impulse response.
-        """
-
-        T_delta = 1 / float(Fs)
-        time_idx = ((np.arange(N) - N / 2)) * T_delta
-        sample_num = np.arange(N)
-        h_rc = np.zeros(N, dtype=float)
-
-        for x in sample_num:
-            t = (x - N / 2) * T_delta
-            if t == 0.0:
-                h_rc[x] = 1.0
-            elif alpha != 0 and t == Ts / (2 * alpha):
-                h_rc[x] = (np.pi / 4) * (np.sin(np.pi * t / Ts) / (np.pi * t / Ts))
-            elif alpha != 0 and t == -Ts / (2 * alpha):
-                h_rc[x] = (np.pi / 4) * (np.sin(np.pi * t / Ts) / (np.pi * t / Ts))
-            else:
-                h_rc[x] = (np.sin(np.pi * t / Ts) / (np.pi * t / Ts)) * \
-                          (np.cos(np.pi * alpha * t / Ts) / (1 - (((2 * alpha * t) / Ts) * ((2 * alpha * t) / Ts))))
-
-        return time_idx, h_rc
-
-    def rrcosfilter(N, alpha, Ts, Fs):
-        """
-        Generates a root raised cosine (RRC) filter (FIR) impulse response.
-
-        Parameters
-        ----------
-        N : int
-            Length of the filter in samples.
-
-        alpha : float
-            Roll off factor (Valid values are [0, 1]).
-
-        Ts : float
-            Symbol period in seconds.
-
-        Fs : float
-            Sampling Rate in Hz.
-
-        Returns
-        ---------
-
-        h_rrc : 1-D ndarray of floats
-            Impulse response of the root raised cosine filter.
-
-        time_idx : 1-D ndarray of floats
-            Array containing the time indices, in seconds, for
-            the impulse response.
-        """
-
-        T_delta = 1 / float(Fs)
-        time_idx = ((np.arange(N) - N / 2)) * T_delta
-        sample_num = np.arange(N)
-        h_rrc = np.zeros(N, dtype=float)
-
-        for x in sample_num:
-            t = (x - N / 2) * T_delta
-            if t == 0.0:
-                h_rrc[x] = 1.0 - alpha + (4 * alpha / np.pi)
-            elif alpha != 0 and t == Ts / (4 * alpha):
-                h_rrc[x] = (alpha / np.sqrt(2)) * (((1 + 2 / np.pi) * \
-                                                    (np.sin(np.pi / (4 * alpha)))) + (
-                                                               (1 - 2 / np.pi) * (np.cos(np.pi / (4 * alpha)))))
-            elif alpha != 0 and t == -Ts / (4 * alpha):
-                h_rrc[x] = (alpha / np.sqrt(2)) * (((1 + 2 / np.pi) * \
-                                                    (np.sin(np.pi / (4 * alpha)))) + (
-                                                               (1 - 2 / np.pi) * (np.cos(np.pi / (4 * alpha)))))
-            else:
-                h_rrc[x] = (np.sin(np.pi * t * (1 - alpha) / Ts) + \
-                            4 * alpha * (t / Ts) * np.cos(np.pi * t * (1 + alpha) / Ts)) / \
-                           (np.pi * t * (1 - (4 * alpha * t / Ts) * (4 * alpha * t / Ts)) / Ts)
-
-        return time_idx, h_rrc
-
     @property
     def plot_constellation(self):
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
-        constellation = self._X * self.E
+        constellation = self.constellation
         plt.scatter(constellation.real, constellation.imag, marker="o", label="Constellation Points")
         ax.grid(True, linewidth=0.25, linestyle="--", color="gray")
 
-        for i, c in enumerate(self._Cbin):
-            ax.annotate(str(c), (constellation.real[i], constellation.imag[i]), textcoords="offset points",
-                        xytext=(0, 10), ha='center', fontsize=8, color='black')
+        if self.modulation_type == 'ASK':
+            for i, c in enumerate(self._Cbin):
+                ax.annotate(str(c), (constellation.real[i], constellation.imag[i]), textcoords="offset points",
+                            xytext=(0, 10 * (-1) ** i), ha='center', fontsize=8, color='black')
+        else:
+            for i, c in enumerate(self._Cbin):
+                ax.annotate(str(c), (constellation.real[i], constellation.imag[i]), textcoords="offset points",
+                            xytext=(0, 10), ha='center', fontsize=8, color='black')
 
         ax.set_xlabel("Re")
         ax.set_ylabel("Im")
@@ -194,7 +99,7 @@ class Modulation(Mapping):
         for i, d in enumerate(data):
             distance = np.inf
             for j, z in enumerate(self.constellationNorm):
-                temp_d = np.abs(z - d)**2
+                temp_d = np.abs(z - d) ** 2
                 if temp_d < distance:
                     distance = temp_d
                     x[i] = j
@@ -256,8 +161,108 @@ class Modulation(Mapping):
         """
         """
         sqrtM = np.sqrt(self.M)
-        Re, Im = np.meshgrid(np.arange(1-sqrtM, sqrtM,2), np.arange(1-sqrtM, sqrtM,2))
+        Re, Im = np.meshgrid(np.arange(1 - sqrtM, sqrtM, 2), np.arange(1 - sqrtM, sqrtM, 2))
         return np.array((Re + 1j * Im).ravel())
+
+    def rcosfilter(self, N, alpha, Ts, Fs):
+        """
+        Generates a raised cosine (RC) filter (FIR) impulse response.
+
+        Parameters
+        ----------
+        N : int
+            Length of the filter in samples.
+
+        alpha : float
+            Roll off factor (Valid values are [0, 1]).
+
+        Ts : float
+            Symbol period in seconds.
+
+        Fs : float
+            Sampling Rate in Hz.
+
+        Returns
+        -------
+
+        h_rc : 1-D ndarray (float)
+            Impulse response of the raised cosine filter.
+
+        time_idx : 1-D ndarray (float)
+            Array containing the time indices, in seconds, for the impulse response.
+        """
+
+        T_delta = 1 / float(Fs)
+        time_idx = ((np.arange(N) - N / 2)) * T_delta
+        sample_num = np.arange(N)
+        h_rc = np.zeros(N, dtype=float)
+
+        for x in sample_num:
+            t = (x - N / 2) * T_delta
+            if t == 0.0:
+                h_rc[x] = 1.0
+            elif alpha != 0 and t == Ts / (2 * alpha):
+                h_rc[x] = (np.pi / 4) * (np.sin(np.pi * t / Ts) / (np.pi * t / Ts))
+            elif alpha != 0 and t == -Ts / (2 * alpha):
+                h_rc[x] = (np.pi / 4) * (np.sin(np.pi * t / Ts) / (np.pi * t / Ts))
+            else:
+                h_rc[x] = (np.sin(np.pi * t / Ts) / (np.pi * t / Ts)) * \
+                          (np.cos(np.pi * alpha * t / Ts) / (1 - (((2 * alpha * t) / Ts) * ((2 * alpha * t) / Ts))))
+
+        return time_idx, h_rc
+
+    def rrcosfilter(self, N, alpha, Ts, Fs):
+        """
+        Generates a root raised cosine (RRC) filter (FIR) impulse response.
+
+        Parameters
+        ----------
+        N : int
+            Length of the filter in samples.
+
+        alpha : float
+            Roll off factor (Valid values are [0, 1]).
+
+        Ts : float
+            Symbol period in seconds.
+
+        Fs : float
+            Sampling Rate in Hz.
+
+        Returns
+        ---------
+
+        h_rrc : 1-D ndarray of floats
+            Impulse response of the root raised cosine filter.
+
+        time_idx : 1-D ndarray of floats
+            Array containing the time indices, in seconds, for
+            the impulse response.
+        """
+
+        T_delta = 1 / float(Fs)
+        time_idx = ((np.arange(N) - N / 2)) * T_delta
+        sample_num = np.arange(N)
+        h_rrc = np.zeros(N, dtype=float)
+
+        for x in sample_num:
+            t = (x - N / 2) * T_delta
+            if t == 0.0:
+                h_rrc[x] = 1.0 - alpha + (4 * alpha / np.pi)
+            elif alpha != 0 and t == Ts / (4 * alpha):
+                h_rrc[x] = (alpha / np.sqrt(2)) * (((1 + 2 / np.pi) * \
+                                                    (np.sin(np.pi / (4 * alpha)))) + (
+                                                           (1 - 2 / np.pi) * (np.cos(np.pi / (4 * alpha)))))
+            elif alpha != 0 and t == -Ts / (4 * alpha):
+                h_rrc[x] = (alpha / np.sqrt(2)) * (((1 + 2 / np.pi) * \
+                                                    (np.sin(np.pi / (4 * alpha)))) + (
+                                                           (1 - 2 / np.pi) * (np.cos(np.pi / (4 * alpha)))))
+            else:
+                h_rrc[x] = (np.sin(np.pi * t * (1 - alpha) / Ts) + \
+                            4 * alpha * (t / Ts) * np.cos(np.pi * t * (1 + alpha) / Ts)) / \
+                           (np.pi * t * (1 - (4 * alpha * t / Ts) * (4 * alpha * t / Ts)) / Ts)
+
+        return time_idx, h_rrc
 
     def simulate(self, info_length, trials=100, SNRdB_min=-1, SNRdB_max=30, SNRdB_step=1, algorithm="approximation"):
         import matplotlib.pyplot as plt
@@ -272,7 +277,7 @@ class Modulation(Mapping):
             for i, (sigma2_N, sigma_N) in enumerate(zip(sigma2_N_range, sigma_N_range)):
                 c = np.random.randint(2, size=info_length)
                 x = self.modulate(c)
-                w = np.random.normal(0, sigma_N/2, size=len(x)) + 1j * np.random.normal(0, sigma_N/2, size=len(x))
+                w = np.random.normal(0, sigma_N / 2, size=len(x)) + 1j * np.random.normal(0, sigma_N / 2, size=len(x))
                 y = x + w
                 Lc = self.softdemodulate(y, sigma2_N, None, algorithm)
                 c_soft = Lc <= 0
