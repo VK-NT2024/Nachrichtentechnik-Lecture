@@ -164,28 +164,71 @@ class Modulation(Mapping):
         Re, Im = np.meshgrid(np.arange(1 - sqrtM, sqrtM, 2), np.arange(1 - sqrtM, sqrtM, 2))
         return np.array((Re + 1j * Im).ravel())
 
-    def rcosfilter(self, N, alpha, Ts, Fs):
+    def impulse_shaping(self, data, filter_type, filter_length, symbol_duration, sampling_rate, rolloff=0.25, f3dB=0.3):
+        """
+        Performs convolution of symbol sequence with filter impulse response
+
+        Parameters
+        ----------
+        data : vector of data symbols (1-D ndarray of floats)
+        filter : string can be 'rc', 'rrc', 'rect','tri'
+        filter_length : Length of the filter in samples.
+        sumbol_duration : Symbol period in seconds.
+        sampling_rate : Sampling Rate in Hz.
+        rolloff : Rolloff factor in casse of filter=='rc' or filter='rrc' (valid values are [0, 1]).
+
+        Returns
+        -------
+        x : 1-D ndarray (float)
+            Impulse response of the raised cosine filter.
+
+        time_idx : 1-D ndarray (float)
+            Array containing the time indices, in seconds, for the impulse response.
+        """
+
+        if filter_type == 'rrc':
+            _, g = self.generate_g_rrc(filter_length, rolloff, symbol_duration, sampling_rate)
+        elif filter_type == 'rc':
+            _, g = self.generate_g_rc(filter_length, rolloff, symbol_duration, sampling_rate)
+        elif filter_type == 'rect':
+            _, g = self.generate_g_rect(filter_length, symbol_duration, sampling_rate)
+        elif filter_type == 'tri':
+            _, g = self.generate_g_tri(filter_length, symbol_duration, sampling_rate)
+        elif filter_type == 'gauss':
+            _, g = self.generate_g_gauss(filter_length, sampling_rate, f3dB)
+        else:
+            raise ValueError("filter_type needs to be 'rc', 'rrc', 'rect', 'tri' or 'gauss'")
+
+        # number of symbols
+        N_symbols = data.shape[0]
+
+        # upsampling factor
+        w = int(sampling_rate * symbol_duration)
+
+        # oversampling data symbols by inserting w zeros
+        data_up = np.append(data.reshape((-1, 1)), np.zeros((N_symbols, w - 1)), axis=1).flatten()
+
+        x = np.convolve(data_up, g) * symbol_duration
+
+        # time axis
+        time = (np.arange(N_symbols * w + filter_length - 1) - filter_length / 2) / sampling_rate
+
+        return time, x
+
+    def generate_g_rc(self, N, r, Ts, Fs):
         """
         Generates a raised cosine (RC) filter (FIR) impulse response.
 
         Parameters
         ----------
-        N : int
-            Length of the filter in samples.
-
-        alpha : float
-            Roll off factor (Valid values are [0, 1]).
-
-        Ts : float
-            Symbol period in seconds.
-
-        Fs : float
-            Sampling Rate in Hz.
+        N : Length of the filter in samples.
+        r : Roll off factor (Valid values are [0, 1]).
+        Ts : Symbol period in seconds.
+        Fs : Sampling Rate in Hz.
 
         Returns
         -------
-
-        h_rc : 1-D ndarray (float)
+        gh_rc : 1-D ndarray (float)
             Impulse response of the raised cosine filter.
 
         time_idx : 1-D ndarray (float)
@@ -195,74 +238,145 @@ class Modulation(Mapping):
         T_delta = 1 / float(Fs)
         time_idx = ((np.arange(N) - N / 2)) * T_delta
         sample_num = np.arange(N)
-        h_rc = np.zeros(N, dtype=float)
+        g_rc = np.zeros(N, dtype=float)
 
         for x in sample_num:
             t = (x - N / 2) * T_delta
             if t == 0.0:
-                h_rc[x] = 1.0
-            elif alpha != 0 and t == Ts / (2 * alpha):
-                h_rc[x] = (np.pi / 4) * (np.sin(np.pi * t / Ts) / (np.pi * t / Ts))
-            elif alpha != 0 and t == -Ts / (2 * alpha):
-                h_rc[x] = (np.pi / 4) * (np.sin(np.pi * t / Ts) / (np.pi * t / Ts))
+                g_rc[x] = 1.0
+            elif r != 0 and t == Ts / (2 * r):
+                g_rc[x] = (np.pi / 4) * (np.sin(np.pi * t / Ts) / (np.pi * t / Ts))
+            elif r != 0 and t == -Ts / (2 * r):
+                g_rc[x] = (np.pi / 4) * (np.sin(np.pi * t / Ts) / (np.pi * t / Ts))
             else:
-                h_rc[x] = (np.sin(np.pi * t / Ts) / (np.pi * t / Ts)) * \
-                          (np.cos(np.pi * alpha * t / Ts) / (1 - (((2 * alpha * t) / Ts) * ((2 * alpha * t) / Ts))))
+                g_rc[x] = (np.sin(np.pi * t / Ts) / (np.pi * t / Ts)) * (np.cos(np.pi * r * t / Ts) / (1 - (((2 * r * t) / Ts) * ((2 * r * t) / Ts))))
 
-        return time_idx, h_rc
+        return time_idx, g_rc / Ts
 
-    def rrcosfilter(self, N, alpha, Ts, Fs):
+    def generate_g_rrc(self, N, r, Ts, Fs):
         """
         Generates a root raised cosine (RRC) filter (FIR) impulse response.
 
         Parameters
         ----------
-        N : int
-            Length of the filter in samples.
-
-        alpha : float
-            Roll off factor (Valid values are [0, 1]).
-
-        Ts : float
-            Symbol period in seconds.
-
-        Fs : float
-            Sampling Rate in Hz.
+        N : Length of the filter in samples.
+        r : Roll off factor (Valid values are [0, 1]).
+        Ts : Symbol period in seconds.
+        Fs : Sampling Rate in Hz.
 
         Returns
         ---------
-
-        h_rrc : 1-D ndarray of floats
+        g_rrc : 1-D ndarray of floats
             Impulse response of the root raised cosine filter.
 
         time_idx : 1-D ndarray of floats
-            Array containing the time indices, in seconds, for
-            the impulse response.
+            Array containing the time indices, in seconds, for the impulse response.
         """
 
         T_delta = 1 / float(Fs)
         time_idx = ((np.arange(N) - N / 2)) * T_delta
         sample_num = np.arange(N)
-        h_rrc = np.zeros(N, dtype=float)
+        g_rrc = np.zeros(N, dtype=float)
 
         for x in sample_num:
             t = (x - N / 2) * T_delta
             if t == 0.0:
-                h_rrc[x] = 1.0 - alpha + (4 * alpha / np.pi)
-            elif alpha != 0 and t == Ts / (4 * alpha):
-                h_rrc[x] = (alpha / np.sqrt(2)) * (((1 + 2 / np.pi) * \
-                                                    (np.sin(np.pi / (4 * alpha)))) + (
-                                                           (1 - 2 / np.pi) * (np.cos(np.pi / (4 * alpha)))))
-            elif alpha != 0 and t == -Ts / (4 * alpha):
-                h_rrc[x] = (alpha / np.sqrt(2)) * (((1 + 2 / np.pi) * \
-                                                    (np.sin(np.pi / (4 * alpha)))) + (
-                                                           (1 - 2 / np.pi) * (np.cos(np.pi / (4 * alpha)))))
+                g_rrc[x] = 1.0 - r + (4 * r / np.pi)
+            elif r != 0 and t == Ts / (4 * r):
+                g_rrc[x] = (r / np.sqrt(2)) * (((1 + 2 / np.pi) * (np.sin(np.pi / (4 * r)))) + ((1 - 2 / np.pi) * (np.cos(np.pi / (4 * r)))))
+            elif r != 0 and t == -Ts / (4 * r):
+                g_rrc[x] = (r / np.sqrt(2)) * (((1 + 2 / np.pi) * (np.sin(np.pi / (4 * r)))) + ((1 - 2 / np.pi) * (np.cos(np.pi / (4 * r)))))
             else:
-                h_rrc[x] = (np.sin(np.pi * t * (1 - alpha) / Ts) + \
-                            4 * alpha * (t / Ts) * np.cos(np.pi * t * (1 + alpha) / Ts)) / \
-                           (np.pi * t * (1 - (4 * alpha * t / Ts) * (4 * alpha * t / Ts)) / Ts)
+                g_rrc[x] = (np.sin(np.pi * t * (1 - r) / Ts) + 4 * r * (t / Ts) * np.cos(np.pi * t * (1 + r) / Ts)) / (np.pi * t * (1 - (4 * r * t / Ts) * (4 * r * t / Ts)) / Ts)
 
-        return time_idx, h_rrc
+        return time_idx, g_rrc / Ts
+
+    def generate_g_rect(self, N, Ts, Fs):
+        """
+        Generates a rectangular filter impulse response.
+
+        Parameters
+        ----------
+        N : Length of the filter in samples.
+        Ts : Duration of rectangular pulse period in seconds.
+        Fs : Sampling Rate in Hz.
+
+        Returns
+        ---------
+        g_rect : 1-D ndarray of floats
+            Impulse response of the root raised cosine filter.
+
+        time_idx : 1-D ndarray of floats
+            Array containing the time indices, in seconds, for the impulse response.
+        """
+
+        T_delta = 1 / float(Fs)
+        time_idx = ((np.arange(N) - N / 2)) * T_delta
+        g_rect = np.zeros(N, dtype=float)
+
+        g_rect[time_idx>-Ts/2] = 1.0
+        g_rect[time_idx > Ts / 2] = 0.0
+
+        return time_idx, g_rect / Ts
+
+    def generate_g_tri(self, N, Ts, Fs):
+        """
+        Generates a triangular filter impulse response.
+
+        Parameters
+        ----------
+        N : Length of the filter in samples.
+        Ts : Duration of triangular pulse in seconds.
+        Fs : Sampling Rate in Hz.
+
+        Returns
+        ---------
+        g_rect : 1-D ndarray of floats
+            Impulse response of the root raised cosine filter.
+
+        time_idx : 1-D ndarray of floats
+            Array containing the time indices, in seconds, for the impulse response.
+        """
+
+        T_delta = 1 / float(Fs)
+        time_idx = ((np.arange(N) - N / 2)) * T_delta
+        g_tri = np.zeros(N, dtype=float)
+        slope = 2 / Ts
+
+        g_tri[time_idx>-Ts/2] = (time_idx[time_idx>-Ts/2]+Ts/2) * slope
+        g_tri[time_idx>0] = 1 - time_idx[time_idx>0] * slope
+        g_tri[time_idx > Ts / 2] = 0.0
+
+        return time_idx, g_tri / Ts
+
+    def generate_g_gauss(self, N, Fs, f3dB):
+        """
+        Generates a Gaussian filter impulse response.
+
+        Parameters
+        ----------
+        N : Length of the filter in samples.
+        Ts : Duration of triangular pulse in seconds.
+        Fs : Sampling Rate in Hz.
+        f3dBT : Frequency with 3dB attenuation of transfer function normalized to symbol duration T
+
+        Returns
+        ---------
+        g_gauss : 1-D ndarray of floats
+            Impulse response of the Gaussian filter.
+
+        time_idx : 1-D ndarray of floats
+            Array containing the time indices, in seconds, for the impulse response.
+        """
+
+        T_delta = 1.0 / Fs
+        time = ((np.arange(N) - N / 2)) * T_delta
+
+        omega3dB = 2 * np.pi * f3dB
+
+        g_gauss = omega3dB / np.sqrt(2*np.pi*np.log(2)) * np.exp(-(omega3dB * time)**2 / 2 / np.log(2))
+
+        return time, g_gauss
 
     def simulate(self, info_length, trials=100, SNRdB_min=-1, SNRdB_max=30, SNRdB_step=1, algorithm="approximation"):
         import matplotlib.pyplot as plt
