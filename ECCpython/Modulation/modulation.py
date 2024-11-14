@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import special as sp
 from Modulation.mapping import Mapping
 from Tools.helperFuncs import de2bi
 from Tools.helperFuncs import bi2de
@@ -182,7 +183,7 @@ class Modulation(Mapping):
         x : 1-D ndarray (float)
             Impulse response of the raised cosine filter.
 
-        time_idx : 1-D ndarray (float)
+        time : 1-D ndarray (float)
             Array containing the time indices, in seconds, for the impulse response.
         """
 
@@ -195,9 +196,11 @@ class Modulation(Mapping):
         elif filter_type == 'tri':
             _, g = self.generate_g_tri(filter_length, symbol_duration, sampling_rate)
         elif filter_type == 'gauss':
-            _, g = self.generate_g_gauss(filter_length, sampling_rate, f3dB)
+            _, g = self.generate_g_gauss(filter_length, symbol_duration, sampling_rate, f3dB)
+        elif filter_type == 'gmsk':
+            _, g = self.generate_g_gmsk(filter_length, symbol_duration, sampling_rate, f3dB)
         else:
-            raise ValueError("filter_type needs to be 'rc', 'rrc', 'rect', 'tri' or 'gauss'")
+            raise ValueError("filter_type needs to be 'rc', 'rrc', 'rect', 'tri', 'gauss' or 'gmsk'")
 
         # number of symbols
         N_symbols = data.shape[0]
@@ -228,30 +231,28 @@ class Modulation(Mapping):
 
         Returns
         -------
-        gh_rc : 1-D ndarray (float)
+        g_rc : 1-D ndarray (float)
             Impulse response of the raised cosine filter.
 
-        time_idx : 1-D ndarray (float)
+        time: 1-D ndarray (float)
             Array containing the time indices, in seconds, for the impulse response.
         """
 
         T_delta = 1 / float(Fs)
-        time_idx = ((np.arange(N) - N / 2)) * T_delta
-        sample_num = np.arange(N)
+        time = ((np.arange(N) - N / 2)) * T_delta
+
         g_rc = np.zeros(N, dtype=float)
-
-        for x in sample_num:
-            t = (x - N / 2) * T_delta
+        for run, t in enumerate(time):
             if t == 0.0:
-                g_rc[x] = 1.0
+                g_rc[run] = 1.0
             elif r != 0 and t == Ts / (2 * r):
-                g_rc[x] = (np.pi / 4) * (np.sin(np.pi * t / Ts) / (np.pi * t / Ts))
+                g_rc[run] = (np.pi / 4) * (np.sin(np.pi * t / Ts) / (np.pi * t / Ts))
             elif r != 0 and t == -Ts / (2 * r):
-                g_rc[x] = (np.pi / 4) * (np.sin(np.pi * t / Ts) / (np.pi * t / Ts))
+                g_rc[run] = (np.pi / 4) * (np.sin(np.pi * t / Ts) / (np.pi * t / Ts))
             else:
-                g_rc[x] = (np.sin(np.pi * t / Ts) / (np.pi * t / Ts)) * (np.cos(np.pi * r * t / Ts) / (1 - (((2 * r * t) / Ts) * ((2 * r * t) / Ts))))
+                g_rc[run] = (np.sin(np.pi * t / Ts) / (np.pi * t / Ts)) * (np.cos(np.pi * r * t / Ts) / (1 - (((2 * r * t) / Ts) * ((2 * r * t) / Ts))))
 
-        return time_idx, g_rc / Ts
+        return time, g_rc / Ts
 
     def generate_g_rrc(self, N, r, Ts, Fs):
         """
@@ -269,27 +270,25 @@ class Modulation(Mapping):
         g_rrc : 1-D ndarray of floats
             Impulse response of the root raised cosine filter.
 
-        time_idx : 1-D ndarray of floats
+        time : 1-D ndarray of floats
             Array containing the time indices, in seconds, for the impulse response.
         """
 
         T_delta = 1 / float(Fs)
-        time_idx = ((np.arange(N) - N / 2)) * T_delta
-        sample_num = np.arange(N)
+        time = ((np.arange(N) - N / 2)) * T_delta
+
         g_rrc = np.zeros(N, dtype=float)
-
-        for x in sample_num:
-            t = (x - N / 2) * T_delta
+        for run, t in enumerate(time):
             if t == 0.0:
-                g_rrc[x] = 1.0 - r + (4 * r / np.pi)
+                g_rrc[run] = 1.0 - r + (4 * r / np.pi)
             elif r != 0 and t == Ts / (4 * r):
-                g_rrc[x] = (r / np.sqrt(2)) * (((1 + 2 / np.pi) * (np.sin(np.pi / (4 * r)))) + ((1 - 2 / np.pi) * (np.cos(np.pi / (4 * r)))))
+                g_rrc[run] = (r / np.sqrt(2)) * (((1 + 2 / np.pi) * (np.sin(np.pi / (4 * r)))) + ((1 - 2 / np.pi) * (np.cos(np.pi / (4 * r)))))
             elif r != 0 and t == -Ts / (4 * r):
-                g_rrc[x] = (r / np.sqrt(2)) * (((1 + 2 / np.pi) * (np.sin(np.pi / (4 * r)))) + ((1 - 2 / np.pi) * (np.cos(np.pi / (4 * r)))))
+                g_rrc[run] = (r / np.sqrt(2)) * (((1 + 2 / np.pi) * (np.sin(np.pi / (4 * r)))) + ((1 - 2 / np.pi) * (np.cos(np.pi / (4 * r)))))
             else:
-                g_rrc[x] = (np.sin(np.pi * t * (1 - r) / Ts) + 4 * r * (t / Ts) * np.cos(np.pi * t * (1 + r) / Ts)) / (np.pi * t * (1 - (4 * r * t / Ts) * (4 * r * t / Ts)) / Ts)
+                g_rrc[run] = (np.sin(np.pi * t * (1 - r) / Ts) + 4 * r * (t / Ts) * np.cos(np.pi * t * (1 + r) / Ts)) / (np.pi * t * (1 - (4 * r * t / Ts) * (4 * r * t / Ts)) / Ts)
 
-        return time_idx, g_rrc / Ts
+        return time, g_rrc / Ts
 
     def generate_g_rect(self, N, Ts, Fs):
         """
@@ -304,20 +303,20 @@ class Modulation(Mapping):
         Returns
         ---------
         g_rect : 1-D ndarray of floats
-            Impulse response of the root raised cosine filter.
+            Impulse response of the rectangular filter.
 
-        time_idx : 1-D ndarray of floats
+        time : 1-D ndarray of floats
             Array containing the time indices, in seconds, for the impulse response.
         """
 
         T_delta = 1 / float(Fs)
-        time_idx = ((np.arange(N) - N / 2)) * T_delta
+        time = ((np.arange(N) - N / 2)) * T_delta
         g_rect = np.zeros(N, dtype=float)
 
-        g_rect[time_idx>-Ts/2] = 1.0
-        g_rect[time_idx > Ts / 2] = 0.0
+        g_rect[time > -Ts/2] = 1.0
+        g_rect[time > Ts / 2] = 0.0
 
-        return time_idx, g_rect / Ts
+        return time, g_rect / Ts
 
     def generate_g_tri(self, N, Ts, Fs):
         """
@@ -331,32 +330,33 @@ class Modulation(Mapping):
 
         Returns
         ---------
-        g_rect : 1-D ndarray of floats
-            Impulse response of the root raised cosine filter.
+        g_tri : 1-D ndarray of floats
+            Impulse response of the triangular filter.
 
-        time_idx : 1-D ndarray of floats
+        time : 1-D ndarray of floats
             Array containing the time indices, in seconds, for the impulse response.
         """
 
         T_delta = 1 / float(Fs)
-        time_idx = ((np.arange(N) - N / 2)) * T_delta
+        time = ((np.arange(N) - N / 2)) * T_delta
+
         g_tri = np.zeros(N, dtype=float)
         slope = 2 / Ts
 
-        g_tri[time_idx>-Ts/2] = (time_idx[time_idx>-Ts/2]+Ts/2) * slope
-        g_tri[time_idx>0] = 1 - time_idx[time_idx>0] * slope
-        g_tri[time_idx > Ts / 2] = 0.0
+        g_tri[time>-Ts/2] = (time[time > -Ts/2] + Ts/2) * slope
+        g_tri[time>0] = 1 - time[time > 0] * slope
+        g_tri[time > Ts / 2] = 0.0
 
-        return time_idx, g_tri / Ts
+        return time, g_tri / Ts
 
-    def generate_g_gauss(self, N, Fs, f3dB):
+    def generate_g_gauss(self, N, Ts, Fs, f3dB):
         """
         Generates a Gaussian filter impulse response.
 
         Parameters
         ----------
         N : Length of the filter in samples.
-        Ts : Duration of triangular pulse in seconds.
+        Ts : Duration of data symbol in seconds.
         Fs : Sampling Rate in Hz.
         f3dBT : Frequency with 3dB attenuation of transfer function normalized to symbol duration T
 
@@ -374,9 +374,41 @@ class Modulation(Mapping):
 
         omega3dB = 2 * np.pi * f3dB
 
+        #g_gauss = np.exp(-(omega3dB * time)**2 / 2 / np.log(2))
+        # g_gauss contains factor omega3dB which is omega3dBTs / Ts --> no extra division by Ts in return command
         g_gauss = omega3dB / np.sqrt(2*np.pi*np.log(2)) * np.exp(-(omega3dB * time)**2 / 2 / np.log(2))
 
         return time, g_gauss
+        #return time, g_gauss/np.amax(g_gauss)/Ts
+
+    def generate_g_gmsk(self, N, Ts, Fs, f3dB):
+        """
+        Generates a GMSK filter impulse response (convolution of rect with gauss).
+
+        Parameters
+        ----------
+        N : Length of the filter in samples.
+        Ts : Duration of triangular pulse in seconds.
+        Fs : Sampling Rate in Hz.
+        f3dBT : Frequency with 3dB attenuation of transfer function normalized to symbol duration T
+
+        Returns
+        ---------
+        g_msk : 1-D ndarray of floats
+            Impulse response of the GMSK filter.
+
+        time_idx : 1-D ndarray of floats
+            Array containing the time indices, in seconds, for the impulse response.
+        """
+
+        T_delta = 1.0 / Fs
+        time = ((np.arange(N) - N / 2)) * T_delta
+
+        alpha = 2 * np.pi * f3dB / np.sqrt(2*np.log(2))
+
+        g_msk = ( sp.erf(alpha * (time + Ts/2)) - sp.erf(alpha * (time - Ts/2))) / 2
+
+        return time, g_msk/Ts
 
     def simulate(self, info_length, trials=100, SNRdB_min=-1, SNRdB_max=30, SNRdB_step=1, algorithm="approximation"):
         import matplotlib.pyplot as plt
