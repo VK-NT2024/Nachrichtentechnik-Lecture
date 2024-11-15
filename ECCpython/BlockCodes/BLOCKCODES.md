@@ -1,14 +1,12 @@
-1. BlockCode:
-    Defines the class blockcode with shared methods 'encoding', 'decoding' and parameters of the code
-2. SPC:
-    Defines the class of Single Parity Check (SPC) codes
-    includes soft decoding method
-3. Hamming:
-    Defines the class of Hamming codes
-    includes simplified version of the message passing algorithm as well as other trellis based decoding methods
-4. Repetition:
-    Defines the class of Repetition codes
-    includes soft decoding method
-5. Simplex:
-    Defines the class of Simplex codes
-    
+## Linear Block Codes
+
+Class users the library galois which supports a rich set of block codes. 
+For teaching purposes, the class BlockCodes only contains quite simple codes like
+* Single Parity Check codes
+* Repetition codes
+* Hamming codes
+* Simplex codes
+
+Generator and parity check matrices are created during initialization. Moreover, encoding and 
+syndrome decoding are provided. For some codes, also soft-output decoding is available.
+

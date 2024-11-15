@@ -4,8 +4,26 @@ Provides puncturing and interleaving of codes.
 
 ## Classes
 
+1.Helper Functions: provides little helpful tools
 2. Puncturing: provides punturing and depuncturing
 2. Interleaving: provides interleavers to perform interleaving and deinterleaving
+
+## Helper Functions
+
+This file currently contains functions for converting a binary vector into a decimal number and vice versa.
+
+```commandline
+from Tools.helperFuncs import bi2de, de2bi
+
+k = 3
+leftMSB = True
+u = np.random.randint(0,2,k)
+u_dec = bi2de(u, leftMSB)
+print('dec(', u, ') = ', u_dec)
+
+u_rev = de2bi(u_dec, k, leftMSB)
+print('bin(', u_dec, ') = ', u_rev)
+```
 
 ## Puncturing Guide
 

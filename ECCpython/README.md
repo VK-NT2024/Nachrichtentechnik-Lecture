@@ -48,7 +48,7 @@ simulations.
 Additionally, we can perform 16-QAM modulation using:
 
 ```commandline
-$ from Mapping.modulation import Modulation 
+$ from Modulation.modulation import Modulation 
 $ mod = Modulation(m=4, coding_type="gray", modulation_type="QAM")
 ```
 
