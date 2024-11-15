@@ -6,13 +6,14 @@ from Tools.helperFuncs import bi2de
 
 
 class Modulation(Mapping):
-    def __init__(self, m=1, coding_type='gray', modulation_type='PSK'):
+    def __init__(self, m=1, coding_type='gray', modulation_type='PSK', phi_0 = 0):
         """
         Parameters
         ----------
         m : number of bits per symbol
         coding_type : 'gray', 'natural', 'antigray'
         modulation_type : 'ASK', 'PSK', 'QAM'
+        phi_0 : start phase (for PSK)
         """
         if modulation_type not in ['PSK', 'ASK', 'QAM']:
             raise ValueError("modulation_type needs to be 'PSK', 'ASK' or 'QAM'")
@@ -31,7 +32,8 @@ class Modulation(Mapping):
 
         super().__init__(m, coding_type)
 
-        self.constellation = modDICT[self.modulation_type]()  # [self._sort]
+        self.phi_0 = phi_0
+        self.constellation = modDICT[self.modulation_type]()
         self.E = np.mean(np.abs(self.constellation) ** 2)  # energy normalisation factor
         self.constellationNorm = self.constellation / np.sqrt(self.E)  # normalised
         self._X = self.modulate(self._Cbin)
@@ -156,7 +158,7 @@ class Modulation(Mapping):
     def PSK(self):
         """
         """
-        return np.array([np.exp((2 * np.pi * 1j / self.M) * n) for n in range(self.M)])
+        return np.array([np.exp(1j * (2 * np.pi / self.M * n + self.phi_0)) for n in range(self.M)])
 
     def QAM(self):
         """
